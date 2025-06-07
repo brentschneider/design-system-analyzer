@@ -52,6 +52,13 @@ export interface WebSocketMessage {
   component?: Component;
 }
 
+export interface ContentChunk {
+  id: string;
+  content: string;
+  type: 'html' | 'markdown' | 'jsx' | 'tsx';
+  metadata: Record<string, unknown>;
+}
+
 declare global {
   // eslint-disable-next-line no-var
   var io: unknown;
