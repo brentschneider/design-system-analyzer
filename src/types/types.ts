@@ -59,6 +59,66 @@ export interface ContentChunk {
   metadata: Record<string, unknown>;
 }
 
+export interface PageMetadata {
+  title?: string;
+  description?: string;
+  keywords?: string[];
+  author?: string;
+  openGraph?: {
+    title?: string;
+    description?: string;
+    image?: string;
+    url?: string;
+    type?: string;
+  };
+  jsonLd?: Record<string, unknown>[];
+  canonicalUrl?: string;
+  language?: string;
+}
+
+export interface CodeSample {
+  id: string;
+  code: string;
+  language?: string;
+  detectedLanguage?: string;
+  confidence?: number;
+  context?: string;
+  sourceElement?: string;
+  lineNumbers?: boolean;
+}
+
+export interface SemanticContent {
+  headings: Array<{
+    level: number;
+    text: string;
+    id?: string;
+  }>;
+  paragraphs: string[];
+  lists: Array<{
+    type: 'ul' | 'ol';
+    items: string[];
+  }>;
+  altTexts: string[];
+  ariaLabels: string[];
+  landmarks: Array<{
+    role: string;
+    label?: string;
+    content?: string;
+  }>;
+}
+
+export interface ExtractedPageContent {
+  id: string;
+  url: string;
+  textContent: string;
+  semanticContent: SemanticContent;
+  metadata: PageMetadata;
+  codeSamples: CodeSample[];
+  timestamp: string;
+  renderTime?: number;
+  errors?: string[];
+}
+
 declare global {
   // eslint-disable-next-line no-var
   var io: unknown;

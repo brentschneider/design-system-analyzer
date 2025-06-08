@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
   try {
-    const { sourceId, url } = await request.json();
+    const { url } = await request.json();
     
     // Simple mock crawl for testing
     const chunks = [{
