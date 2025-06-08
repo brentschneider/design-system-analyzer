@@ -29,13 +29,15 @@ export const designSystemSlice = createSlice({
   initialState,
   reducers: {
     addSource: (state, action: PayloadAction<{ url: string; name?: string }>) => {
-      const id = `source-${Date.now()}`;
-      state.sources.push({
-        id,
-        url: action.payload.url,
-        name: action.payload.name || new URL(action.payload.url).hostname,
-        status: 'idle'
-      });
+      const id = `source-${action.payload.url.replace(/[^a-z0-9]/gi, '-').toLowerCase()}`;
+      if (!state.sources.find(s => s.id === id)) {
+        state.sources.push({
+          id,
+          url: action.payload.url,
+          name: action.payload.name || new URL(action.payload.url).hostname,
+          status: 'idle'
+        });
+      }
     },
     removeSource: (state, action: PayloadAction<string>) => {
       state.sources = state.sources.filter(s => s.id !== action.payload);
