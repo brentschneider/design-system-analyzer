@@ -12,6 +12,11 @@ import { selectSelectedComponent, selectComponents } from '../store/designSystem
 const ComponentViewerComponent: FC = () => {
   const selectedComponent = useAppSelector(selectSelectedComponent);
   const components = useAppSelector(selectComponents);
+  
+  console.log('ComponentViewer state:', { 
+    hasSelectedComponent: !!selectedComponent,
+    totalComponents: components.length 
+  });
 
   if (!selectedComponent) {
     return (

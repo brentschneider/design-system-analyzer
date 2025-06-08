@@ -37,6 +37,8 @@ export async function crawlDesignSystem(
   signal?: AbortSignal
 ): Promise<ExtractedPageContent[]> {
   const normalizedUrl = normalizeUrl(url);
+  console.log('🚀 Starting crawl of:', normalizedUrl);
+  
   const browser = await puppeteer.launch({ 
     headless: true,
     args: [
@@ -49,146 +51,79 @@ export async function crawlDesignSystem(
       '--disable-gpu'
     ]
   });
-  
-  const page = await browser.newPage();
-  const extractedPages: ExtractedPageContent[] = [];
-  
-  // Set a reasonable timeout and viewport
-  page.setDefaultTimeout(30000);
-  await page.setViewport({ width: 1200, height: 800 });
-  
+
   try {
-    // Get initial page and discover links
-    const links = await discoverPages(page, normalizedUrl);
-    const uniqueLinks = [...new Set([normalizedUrl, ...links])].slice(0, MAX_PAGES);
-    
-    console.log(`Found ${uniqueLinks.length} pages to crawl`);
-    
-    // Process each page
-    for (let i = 0; i < uniqueLinks.length && !signal?.aborted; i++) {
-      const currentUrl = uniqueLinks[i];
-      
-      onProgress({
-        sourceId: url,
-        pagesProcessed: i + 1,
-        totalPages: uniqueLinks.length,
-        componentsFound: extractedPages.length,
-        currentPage: currentUrl
-      });
+    console.log('📊 Browser launched successfully');
+    const pages: ExtractedPageContent[] = [];
+    const visitedUrls = new Set<string>();
+    const queue = [normalizedUrl];
+    let pageCount = 0;
+
+    while (queue.length > 0 && pageCount < MAX_PAGES) {
+      if (signal?.aborted) {
+        console.log('❌ Crawl aborted');
+        break;
+      }
+
+      const currentUrl = queue.shift()!;
+      if (visitedUrls.has(currentUrl)) continue;
+      visitedUrls.add(currentUrl);
+
+      console.log(`\n🔍 Processing page ${pageCount + 1}:`, currentUrl);
       
       try {
-        const startTime = Date.now();
-        const pageContent = await extractPageContent(page, currentUrl);
-        const renderTime = Date.now() - startTime;
+        const page = await browser.newPage();
+        await page.setViewport({ width: 1200, height: 800 });
         
-        extractedPages.push({
-          ...pageContent,
-          renderTime
+        // Set longer timeout and enable JS
+        await page.setDefaultNavigationTimeout(30000);
+        await page.setJavaScriptEnabled(true);
+
+        console.log('  ⏳ Loading page...');
+        await page.goto(currentUrl, { waitUntil: 'networkidle0' });
+        console.log('  ✅ Page loaded');
+
+        // Wait for dynamic content
+        await wait(2000);
+
+        const extractedPage = await extractPageContent(page, currentUrl);
+        console.log(`  📦 Extracted content:
+          - ${extractedPage.semanticContent.headings.length} headings
+          - ${extractedPage.codeSamples.length} code samples
+          - ${extractedPage.semanticContent.paragraphs.length} paragraphs`);
+
+        pages.push(extractedPage);
+        pageCount++;
+
+        onProgress({
+          sourceId: url,
+          pagesProcessed: pageCount,
+          totalPages: Math.min(queue.length + pageCount, MAX_PAGES),
+          currentPage: currentUrl
         });
+
+        // Get more URLs from the page
+        const newUrls = await extractUrls(page, normalizedUrl);
+        console.log(`  🔗 Found ${newUrls.length} new URLs`);
         
-        console.log(`Extracted content from ${currentUrl} (${renderTime}ms)`);
+        queue.push(...newUrls.filter(url => !visitedUrls.has(url)));
+        await page.close();
+        
+        // Rate limiting
+        await wait(RATE_LIMIT_MS);
       } catch (error) {
-        console.error(`Failed to extract content from ${currentUrl}:`, error);
-        // Add error entry
-        extractedPages.push({
-          id: `error-${Date.now()}`,
-          url: currentUrl,
-          textContent: '',
-          semanticContent: {
-            headings: [],
-            paragraphs: [],
-            lists: [],
-            altTexts: [],
-            ariaLabels: [],
-            landmarks: []
-          },
-          metadata: {},
-          codeSamples: [],
-          timestamp: new Date().toISOString(),
-          errors: [error instanceof Error ? error.message : String(error)]
-        });
+        console.error(`❌ Error processing ${currentUrl}:`, error);
+        continue;
       }
-      
-      // Rate limiting between pages
-      await wait(RATE_LIMIT_MS);
     }
-  } catch (error) {
-    console.error('Crawling error:', error);
-    throw error;
+
+    console.log(`\n✅ Crawl complete! Processed ${pages.length} pages`);
+    return pages;
   } finally {
     await browser.close();
   }
-  
-  return extractedPages;
 }
 
-/**
- * Discover pages to crawl from the initial URL
- */
-async function discoverPages(page: Page, url: string): Promise<string[]> {
-  let retries = 0;
-  
-  while (retries < MAX_RETRIES) {
-    try {
-      await page.goto(url, { 
-        waitUntil: 'networkidle0',
-        timeout: 30000 
-      });
-      
-      // Wait for dynamic content to load
-      await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 2000)));
-      
-      const links = await page.evaluate((baseUrl) => {
-        const linkElements = Array.from(document.querySelectorAll('a[href]'));
-        return linkElements
-          .map(a => {
-            const href = a.getAttribute('href');
-            if (!href) return null;
-            
-            try {
-              return new URL(href, baseUrl).toString();
-            } catch {
-              return null;
-            }
-          })
-          .filter((href): href is string => {
-            if (!href) return false;
-            
-            // Filter for documentation/component pages
-            const url = new URL(href);
-            const pathname = url.pathname.toLowerCase();
-            
-            return (
-              url.origin === new URL(baseUrl).origin &&
-              (
-                pathname.includes('/docs/') || 
-                pathname.includes('/components/') ||
-                pathname.includes('/design-system/') ||
-                pathname.includes('/ui/') ||
-                pathname.includes('/patterns/') ||
-                pathname.includes('/guide/') ||
-                pathname.includes('/api/')
-              ) &&
-              !pathname.includes('/api/') && // Exclude actual API endpoints
-              !href.includes('#') && // Exclude anchors
-              !href.includes('?') // Exclude query parameters for now
-            );
-          });
-      }, url);
-      
-      return links;
-    } catch (error) {
-      retries++;
-      if (retries === MAX_RETRIES) {
-        console.error(`Failed to discover pages from ${url}:`, error);
-        return [];
-      }
-      await wait(RATE_LIMIT_MS);
-    }
-  }
-  
-  return [];
-}
 
 /**
  * Extract comprehensive content from a rendered page
@@ -527,4 +462,39 @@ export function extractComponentInfo(html: string): ExtractedComponentInfo {
     .filter(code => code.length > 0);
   
   return { type, props, description, examples };
+}
+
+async function extractUrls(page: Page, baseUrl: string): Promise<string[]> {
+  const newUrls: string[] = [];
+  const baseUrlObj = new URL(baseUrl);
+
+  // Get all links on the page
+  const hrefs = await page.evaluate(() => {
+    return Array.from(document.querySelectorAll('a[href]'))
+      .map(a => a.getAttribute('href'))
+      .filter(href => href != null) as string[];
+  });
+
+  // Process and filter URLs
+  hrefs.forEach(href => {
+    try {
+      const url = new URL(href, baseUrl);
+      // Only include URLs from the same host
+      if (url.hostname === baseUrlObj.hostname && 
+          !url.pathname.includes('/api/') &&
+          !url.pathname.endsWith('.png') &&
+          !url.pathname.endsWith('.jpg') &&
+          !url.pathname.endsWith('.jpeg') &&
+          !url.pathname.endsWith('.gif') &&
+          !url.pathname.endsWith('.svg') &&
+          !url.pathname.endsWith('.css') &&
+          !url.pathname.endsWith('.js')) {
+        newUrls.push(url.toString());
+      }
+    } catch {
+      console.warn('Invalid URL:', href);
+    }
+  });
+
+  return [...new Set(newUrls)]; // Remove duplicates
 }

@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Enhanced Crawler Button Component
  * 
@@ -7,6 +9,9 @@
 
 import React, { useState } from 'react';
 import { ExtractedPageContent } from '../types/types';
+import { convertPagesToComponents } from '../lib/dataIntegration';
+import { store } from '../store/store';
+import { addComponent, addSource } from '../store/designSystemSlice';
 
 interface CrawlerButtonProps {
   url: string;
@@ -48,12 +53,60 @@ export const CrawlerButton: React.FC<CrawlerButtonProps> = ({
       const data = await response.json();
 
       if (data.success && data.pages) {
+        console.log('🎯 Received crawler response:', {
+          pageCount: data.pages.length,
+          summary: data.summary
+        });
+
         setProgress(`Extracted ${data.pages.length} pages`);
+        
+        // Log details about the extracted content
+        data.pages.forEach((page: ExtractedPageContent, index: number) => {
+          console.log(`\n📄 Page ${index + 1}: ${page.url}`);
+          console.log(`   - Headings: ${page.semanticContent.headings.length}`);
+          console.log(`   - Code samples: ${page.codeSamples.length}`);
+          console.log(`   - Paragraphs: ${page.semanticContent.paragraphs.length}`);
+          
+          // Log some samples
+          if (page.semanticContent.headings.length > 0) {
+            console.log('   Sample headings:', page.semanticContent.headings.slice(0, 3));
+          }
+          if (page.codeSamples.length > 0) {
+            console.log('   Sample code:', page.codeSamples[0].code.substring(0, 100));
+          }
+        });
+
+        // Convert pages to components
+        console.log('Converting pages to components...');
+        const components = convertPagesToComponents(data.pages);
+        
+        // Add source to Redux store
+        store.dispatch(addSource({ url, name: new URL(url).hostname }));
+        
+        // Get the source ID that was generated in the store
+        const sourceId = `source-${url.replace(/[^a-z0-9]/gi, '-').toLowerCase()}`;
+        
+        // Add components to Redux store with source reference
+        console.log('Adding components to store:', components.length);
+        components.forEach((component) => {
+          store.dispatch(addComponent({
+            ...component,
+            sourceId
+          }));
+          console.log('Added component:', component.name);
+        });
+        
+        // Notify parent about extracted pages
+        console.log('Notifying about extracted pages');
         onPagesExtracted(data.pages);
         
         setTimeout(() => {
+          setProgress(`Found ${components.length} components in ${data.pages.length} pages`);
+        }, 1000);
+        
+        setTimeout(() => {
           setProgress('');
-        }, 3000);
+        }, 4000);
       } else {
         throw new Error(data.error || 'Crawling failed');
       }

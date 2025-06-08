@@ -56,7 +56,7 @@ export interface ContentChunk {
   id: string;
   content: string;
   type: 'html' | 'markdown' | 'jsx' | 'tsx';
-  metadata: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface PageMetadata {
@@ -74,6 +74,9 @@ export interface PageMetadata {
   jsonLd?: Record<string, unknown>[];
   canonicalUrl?: string;
   language?: string;
+  lastModified?: string;
+  sourceUrl?: string;
+  componentId?: string;
 }
 
 export interface CodeSample {
@@ -92,11 +95,13 @@ export interface SemanticContent {
     level: number;
     text: string;
     id?: string;
+    position?: number;
   }>;
   paragraphs: string[];
   lists: Array<{
     type: 'ul' | 'ol';
     items: string[];
+    position?: number;
   }>;
   altTexts: string[];
   ariaLabels: string[];
@@ -104,6 +109,11 @@ export interface SemanticContent {
     role: string;
     label?: string;
     content?: string;
+    position?: number;
+  }>;
+  tables?: Array<{
+    rows: string[][];
+    position?: number;
   }>;
 }
 

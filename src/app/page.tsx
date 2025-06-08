@@ -7,9 +7,9 @@ import DataManager from "../components/DataManager";
 import ExportManager from "../components/ExportManager";
 import { useState, useEffect } from "react";
 import { ExtractedPageContent } from "../types/types";
-import { autoSaveManager } from "../lib/dataIntegration";
+import { autoSaveManager, convertPagesToComponents } from "../lib/dataIntegration";
 import { useAppDispatch } from "../store/hooks";
-import { addSource } from "../store/designSystemSlice";
+import { addSource, addComponent } from "../store/designSystemSlice";
 
 export default function Home() {
   const dispatch = useAppDispatch();
@@ -38,6 +38,39 @@ export default function Home() {
     dispatch(addSource({ url, name }));
   };
 
+  // Handle pages extracted from crawling
+  const handlePagesExtracted = (pages: ExtractedPageContent[]) => {
+    console.log('📄 Pages extracted:', pages.length);
+    setExtractedPages(pages);
+    
+    // Convert pages to components and add to Redux store
+    const components = convertPagesToComponents(pages);
+    console.log(`🔧 Converted ${pages.length} pages to ${components.length} components:`, components);
+    
+    // Log component details for debugging
+    components.forEach((component, index) => {
+      console.log(`Component ${index + 1}:`, {
+        id: component.id,
+        name: component.name,
+        source: component.sourceId,
+        props: component.props.length,
+        codeSnippets: component.codeSnippets.length
+      });
+    });
+    
+    // Add each component to the store
+    components.forEach(component => {
+      console.log('➕ Adding component to store:', component.name);
+      dispatch(addComponent(component));
+    });
+    
+    if (components.length > 0) {
+      console.log('✅ Component extraction and storage complete!');
+    } else {
+      console.log('⚠️ No components were extracted from the pages');
+    }
+  };
+
   return (
     <main className="min-h-screen bg-gray-100 dark:bg-gray-900">
       <div className="container mx-auto py-8 px-4">
@@ -45,7 +78,7 @@ export default function Home() {
           {/* Left Sidebar */}
           <div className="col-span-12 md:col-span-4 space-y-8">
             <EnhancedURLInput 
-              onPagesExtracted={setExtractedPages}
+              onPagesExtracted={handlePagesExtracted}
               onNewUrl={handleNewUrl}
             />
             <div className="h-[600px]">

@@ -12,7 +12,8 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
     
-    console.log(`Starting enhanced crawl of: ${url}`);
+    console.log(`🌐 Starting enhanced crawl of: ${url}`);
+    console.log('⚙️ Using enhanced extraction settings');
     
     const pages: ExtractedPageContent[] = [];
     
